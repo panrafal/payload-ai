@@ -12,6 +12,7 @@ import {
   PLUGIN_INSTRUCTIONS_TABLE,
   PLUGIN_NAME,
 } from '../defaults.js'
+import { asyncHandlebars } from '../libraries/handlebars/asyncHandlebars.js'
 import { registerEditorHelper } from '../libraries/handlebars/helpers.js'
 import { handlebarsHelpersMap } from '../libraries/handlebars/helpersMap.js'
 import { replacePlaceholders } from '../libraries/handlebars/replacePlaceholders.js'
@@ -40,16 +41,21 @@ const checkAccess = async (req: PayloadRequest, pluginConfig: PluginConfig) => {
 
 const extendContextWithPromptFields = (data: object, ctx: PromptFieldGetterContext, pluginConfig: PluginConfig) => {
   const { promptFields } = pluginConfig
-  const expandedData = { ...data }
-  promptFields.forEach(({name, getter}) => {
-    if (getter) {
-      Object.defineProperty(expandedData, name, {
-        get: () => getter(data, ctx)
-      })
-    }
-    // If there's no getter, we don't need to do anything, as value is already in the context
+  const fieldsMap = new Map(
+    promptFields.filter((f) => !f.collections || f.collections.includes(ctx.collection)).map((f) => [f.name, f])
+  )
+  return new Proxy(data, {
+    get: (target, prop) => {
+      const field = fieldsMap.get(prop as string)
+      if (field?.getter) {
+        const value = field.getter(data, ctx)
+        return Promise.resolve(value).then((v) => new asyncHandlebars.SafeString(v))
+      }
+      // {{prop}} escapes content by default. Here we make sure it won't be escaped.
+      const value = target[prop]
+      return typeof value === "string" ? new asyncHandlebars.SafeString(value) : value
+    },
   })
-  return expandedData
 }
 
 const assignPrompt = async (
