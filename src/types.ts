@@ -26,7 +26,6 @@ export interface PluginConfigAccess {
 }
 
 export interface PluginOptions {
-
   /**
    * Provide local tags to filter language options from the Translate Menu
    * Check for the available local tags,
@@ -68,6 +67,7 @@ export interface PluginConfig {
   interfaceName?: string
   mediaUpload?: PluginConfigMediaUploadFunction
   options?: PluginOptions
+  promptFields?: PromptField[]
   /**
    * Custom action prompts for AI text generation
    * If not provided, uses default prompts
@@ -194,3 +194,18 @@ export type GenerateImageParams = {
   style?: ImageGenerateParams['style']
   version?: ImageGenerateParams['model']
 }
+
+export type SerializedPromptField = {
+  collections?: (CollectionSlug)[]
+  name: string
+}
+
+export type PromptFieldGetterContext = {
+  collection: CollectionSlug
+  type: string
+}
+
+export type PromptField = {
+  // If not provided, the value will be returned from the data object as-is
+  getter?: (data: object, ctx: PromptFieldGetterContext) => Promise<string> | string
+} & SerializedPromptField

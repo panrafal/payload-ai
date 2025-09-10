@@ -1,8 +1,8 @@
-import type { PayloadRequest } from 'payload'
+import type { CollectionSlug, PayloadRequest } from 'payload'
 
 import * as process from 'node:process'
 
-import type { ActionMenuItems, Endpoints, PluginConfig } from '../types.js'
+import type { ActionMenuItems, Endpoints, PluginConfig, PromptFieldGetterContext } from '../types.js'
 
 import { defaultPrompts } from '../ai/prompts.js'
 import { filterEditorSchemaByNodes } from '../ai/utils/filterEditorSchemaByNodes.js'
@@ -38,11 +38,26 @@ const checkAccess = async (req: PayloadRequest, pluginConfig: PluginConfig) => {
   return true
 }
 
+const extendContextWithPromptFields = (data: object, ctx: PromptFieldGetterContext, pluginConfig: PluginConfig) => {
+  const { promptFields } = pluginConfig
+  const expandedData = { ...data }
+  promptFields.forEach(({name, getter}) => {
+    if (getter) {
+      Object.defineProperty(expandedData, name, {
+        get: () => getter(data, ctx)
+      })
+    }
+    // If there's no getter, we don't need to do anything, as value is already in the context
+  })
+  return expandedData
+}
+
 const assignPrompt = async (
   action: ActionMenuItems,
   {
     type,
     actionParams,
+    collection,
     context,
     field,
     layout,
@@ -52,6 +67,7 @@ const assignPrompt = async (
     template,
   }: {
     actionParams: Record<any, any>
+    collection: CollectionSlug
     context: object
     field: string
     layout: string
@@ -60,9 +76,10 @@ const assignPrompt = async (
     systemPrompt: string
     template: string
     type: string
-  },  
+  },
 ) => {
-  const prompt = await replacePlaceholders(template, context)
+  const extendedContext = extendContextWithPromptFields(context, {type, collection}, pluginConfig)
+  const prompt = await replacePlaceholders(template, extendedContext)
   const toLexicalHTML = type === 'richText' ? handlebarsHelpersMap.toHTML.name : ''
 
   const assignedPrompts = {
@@ -107,7 +124,7 @@ const assignPrompt = async (
   return {
     layout: updatedLayout,
     // TODO: revisit this toLexicalHTML
-    prompt: await replacePlaceholders(`{{${toLexicalHTML} ${field}}}`, context),
+    prompt: await replacePlaceholders(`{{${toLexicalHTML} ${field}}}`, extendedContext),
     system,
   }
 }
@@ -155,7 +172,7 @@ export const endpoints: (pluginConfig: PluginConfig) => Endpoints = (pluginConfi
           }
 
           const schemaPath = instructions['schema-path'] as string
-          const fieldName = schemaPath?.split('.').pop()
+          const [collectionName, fieldName] = schemaPath?.split('.') || []
 
           registerEditorHelper(req.payload, schemaPath)
 
@@ -181,6 +198,7 @@ export const endpoints: (pluginConfig: PluginConfig) => Endpoints = (pluginConfi
           const prompts = await assignPrompt(action, {
             type: instructions['field-type'] as string,
             actionParams,
+            collection: collectionName,
             context: contextData,
             field: fieldName,
             layout: instructions.layout,
@@ -261,7 +279,8 @@ export const endpoints: (pluginConfig: PluginConfig) => Endpoints = (pluginConfi
 
           registerEditorHelper(req.payload, schemaPath)
 
-          const text = await replacePlaceholders(promptTemplate, contextData)
+          const extendedContext = extendContextWithPromptFields(contextData, {type: instructions['field-type'], collection: collectionSlug}, pluginConfig)
+          const text = await replacePlaceholders(promptTemplate, extendedContext)
           const modelId = instructions['model-id']
           const uploadCollectionSlug = instructions['relation-to']
 
@@ -312,6 +331,11 @@ export const endpoints: (pluginConfig: PluginConfig) => Endpoints = (pluginConfi
             ...modelOptions,
             images: editImages,
           }
+
+          if (pluginConfig.debugging) {
+            req.payload.logger.info({text}, `— AI Plugin: Executing image prompt using ${model.id}`)
+          }
+
 
           const result = await model.handler?.(text, modelOptions)
           let assetData: { alt?: string; id: number | string }
