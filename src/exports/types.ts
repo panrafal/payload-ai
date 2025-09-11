@@ -1,5 +1,8 @@
 export type { payloadAiPlugin } from '../plugin.ts'
 export type { 
+  ActionMenuItems,
+  ActionPrompt,
+  ActionPromptOptions,
   GenerationConfig, 
   GenerationModel,
   PluginConfig, 
