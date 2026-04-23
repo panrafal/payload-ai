@@ -80,89 +80,87 @@ const payloadAiPlugin =
     let updatedConfig: Config = { ...incomingConfig }
     let collectionsFieldPathMap = {}
 
-    if (isActivated) {
-      const Instructions = instructionsCollection(pluginConfig)
-      // Inject editor schema to config, so that it can be accessed when /textarea endpoint will hit
-      const lexicalSchema = lexicalJsonSchema(pluginConfig.editorConfig?.nodes)
+    const Instructions = instructionsCollection(pluginConfig)
+    // Inject editor schema to config, so that it can be accessed when /textarea endpoint will hit
+    const lexicalSchema = lexicalJsonSchema(pluginConfig.editorConfig?.nodes)
 
-      Instructions.admin = {
-        ...Instructions.admin,
-      }
+    Instructions.admin = {
+      ...Instructions.admin,
+    }
 
-      if (pluginConfig.debugging) {
-        Instructions.admin.hidden = false
-      }
+    if (pluginConfig.debugging) {
+      Instructions.admin.hidden = false
+    }
 
-      Instructions.admin.custom = {
-        ...(Instructions.admin.custom || {}),
-        [PLUGIN_NAME]: {
-          editorConfig: {
-            // Used in admin client for useObject hook
-            schema: lexicalSchema,
-          },
+    Instructions.admin.custom = {
+      ...(Instructions.admin.custom || {}),
+      [PLUGIN_NAME]: {
+        editorConfig: {
+          // Used in admin client for useObject hook
+          schema: lexicalSchema,
         },
-      }
+      },
+    }
 
-      const collections = [...(incomingConfig.collections ?? []), Instructions]
-      const globals = [...(incomingConfig.globals ?? [])]
-      const { collections: collectionSlugs, globals: globalsSlugs } = pluginConfig
+    const collections = [...(incomingConfig.collections ?? []), Instructions]
+    const globals = [...(incomingConfig.globals ?? [])]
+    const { collections: collectionSlugs, globals: globalsSlugs } = pluginConfig
 
-      const { components: { providers = [] } = {} } = incomingConfig.admin || {}
-      const updatedProviders = [
-        ...(providers ?? []),
-        {
-          path: '@ai-stack/payloadcms/client#InstructionsProvider',
-        },
-      ]
+    const { components: { providers = [] } = {} } = incomingConfig.admin || {}
+    const updatedProviders = [
+      ...(providers ?? []),
+      {
+        path: '@ai-stack/payloadcms/client#InstructionsProvider',
+      },
+    ]
 
-      incomingConfig.admin = {
-        ...(incomingConfig.admin || {}),
-        components: {
-          ...(incomingConfig.admin?.components ?? {}),
-          providers: updatedProviders,
-        },
-      }
+    incomingConfig.admin = {
+      ...(incomingConfig.admin || {}),
+      components: {
+        ...(incomingConfig.admin?.components ?? {}),
+        providers: updatedProviders,
+      },
+    }
 
-      const pluginEndpoints = endpoints(pluginConfig)
-      updatedConfig = {
-        ...incomingConfig,
-        collections: collections.map((collection) => {
-          if (collectionSlugs[collection.slug]) {
-            const { schemaPathMap, updatedCollectionConfig } = updateFieldsConfig(collection)
-            collectionsFieldPathMap = {
-              ...collectionsFieldPathMap,
-              ...schemaPathMap,
-            }
-            return updatedCollectionConfig as CollectionConfig
+    const pluginEndpoints = endpoints(pluginConfig)
+    updatedConfig = {
+      ...incomingConfig,
+      collections: collections.map((collection) => {
+        if (collectionSlugs[collection.slug]) {
+          const { schemaPathMap, updatedCollectionConfig } = updateFieldsConfig(collection)
+          collectionsFieldPathMap = {
+            ...collectionsFieldPathMap,
+            ...schemaPathMap,
           }
+          return updatedCollectionConfig as CollectionConfig
+        }
 
-          return collection
-        }),
-        endpoints: [
-          ...(incomingConfig.endpoints ?? []),
-          pluginEndpoints.textarea,
-          pluginEndpoints.upload,
-          fetchFields(pluginConfig),
-        ],
-        globals: globals.map((global) => {
-          if (globalsSlugs && globalsSlugs[global.slug]) {
-            const { schemaPathMap, updatedCollectionConfig } = updateFieldsConfig(global)
-            collectionsFieldPathMap = {
-              ...collectionsFieldPathMap,
-              ...schemaPathMap,
-            }
-            return updatedCollectionConfig as GlobalConfig
+        return collection
+      }),
+      endpoints: [
+        ...(incomingConfig.endpoints ?? []),
+        pluginEndpoints.textarea,
+        pluginEndpoints.upload,
+        fetchFields(pluginConfig),
+      ],
+      globals: globals.map((global) => {
+        if (globalsSlugs && globalsSlugs[global.slug]) {
+          const { schemaPathMap, updatedCollectionConfig } = updateFieldsConfig(global)
+          collectionsFieldPathMap = {
+            ...collectionsFieldPathMap,
+            ...schemaPathMap,
           }
+          return updatedCollectionConfig as GlobalConfig
+        }
 
-          return global
-        }),
-        i18n: {
-          ...(incomingConfig.i18n || {}),
-          translations: {
-            ...deepMerge(translations, incomingConfig.i18n?.translations ?? {}),
-          },
+        return global
+      }),
+      i18n: {
+        ...(incomingConfig.i18n || {}),
+        translations: {
+          ...deepMerge(translations, incomingConfig.i18n?.translations ?? {}),
         },
-      }
+      },
     }
 
     updatedConfig.onInit = async (payload) => {
